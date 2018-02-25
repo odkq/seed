@@ -41,7 +41,8 @@ static Obj *prim_prn(void *root, Obj **env, Obj **list) {
         error("wrong number of parameters for prn");
     if (args->car->type != TSTRING)
         error("prn only accept strings");
-    puts(args->car->string);
+    fputs(args->car->string, stdout);
+    fflush(stdout);
     return Nil;
 }
 
@@ -52,10 +53,60 @@ static Obj *prim_sleep(void *root, Obj **env, Obj **list) {
     if ((length(args) < 1))
         error("wrong number of parameters for prn");
     if (args->car->type != TINT)
-        error("sleep only accept strings");
+        error("sleep only accept numbers");
     sleep(args->car->value);
     return Nil;
 }
+
+// (read-character) ; read a character from raw input
+static Obj *prim_read_character(void *root, Obj **env, Obj **list) {
+	unsigned char c;
+	int nread;
+
+    nread = read(STDIN_FILENO, &c, 1);
+    if (nread <= 0)
+		return Nil;
+    return make_int(root, (int)c);
+}
+
+// (load-file <path>); loads the file into a list of strings
+static Obj *prim_load_file(void *root, Obj **env, Obj **list) {
+    char buffer[STRING_MAX_LEN + 1];
+    char *p;
+    Obj *args = eval_list(root, env, list);
+    DEFINE1(output);
+    Obj *currobj;
+    Obj *currel = *output;
+
+    if ((length(args) < 1))
+        error("wrong number of parameters for load-file");
+    if (args->car->type != TSTRING)
+        error("load-file only accept string");
+    FILE *f;
+    printf("Opening %s\n", args->car->string);
+    f = fopen(args->car->string, "r");
+    if (f == NULL) {
+        printf("Error opening %s\n", args->car->string);
+        return Nil;
+    }
+    while(1) {
+        p = fgets(buffer, STRING_MAX_LEN, f);
+        if (p == NULL) {
+            fclose(f);
+            return *output;
+        }
+        currobj = make_string(root, buffer);
+        if (*output == NULL) {
+            (*output) = currobj;
+            printf("first line %s", buffer);
+            currel = *output;
+        } else {
+            currel->cdr = currobj;
+            currel = currel->cdr;
+        }
+    }
+}
+
 /* Raw mode: Taken from linenoise (see LICENSE) */
 static int enable_raw_mode(int fd) {
     struct termios raw;
@@ -107,8 +158,10 @@ int main(int argc, char **argv) {
     int repl = 0;
 
     // Debug flags
-    debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
-    always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
+    //debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
+    //always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
+    always_gc = 0;
+    debug_gc = 0;
 
     // Memory allocation
     memory = alloc_semispace();
@@ -124,6 +177,8 @@ int main(int argc, char **argv) {
     add_primitive(root, env, "screen-size", prim_screen_size);
     add_primitive(root, env, "prn", prim_prn);
     add_primitive(root, env, "sleep", prim_sleep);
+    add_primitive(root, env, "load-file", prim_load_file);
+    add_primitive(root, env, "read-character", prim_read_character);
 
     if ((argc > 1) && (!strcmp(argv[1], "-r"))) {
         printf("Entering repl\n");

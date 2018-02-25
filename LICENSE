@@ -25,14 +25,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-seed contains a lisp interpreter, whose author is Rui Ueyama
-<rui314@gmail.com> (https://github.com/rui314/minilisp) and placed on the
-Public Domain
+seed contains a slightly modified MiniLisp interpreter,
+(https://github.com/rui314/minilisp) whose author is Rui Ueyama
+<rui314@gmail.com> and placed on the Public Domain
+
+See https://github.com/odkq/minilisp for the details on the modifications
 
 ------------------------------------------------------------------------------
 
-Certain terminal handling code comes from linenoise, with the following
-license:
+Certain terminal handling code comes from linenoise
+(https://github.com/antirez/linenoise), with the following license:
 
 Copyright (c) 2010-2014, Salvatore Sanfilippo <antirez at gmail dot com>
 Copyright (c) 2010-2013, Pieter Noordhuis <pcnoordhuis at gmail dot com>

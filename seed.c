@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 
 #include "seed.lisp.h"
+#define NO_MAIN 1
 #include "minilisp.c"
 
 

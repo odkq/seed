@@ -16,7 +16,7 @@ all: $(SEEDBIN) $(SEEDDEBUG)
 seed.lisp.h: seed.lisp
 	python3 include_file.py seed.lisp seed.lisp.h
 
-seed: seed.lisp.h seed.c
+seed: seed.lisp.h seed.c minilisp.c
 	gcc $(CFLAGS) seed.c -o seed
 
 seed_debug: seed.lisp.h seed.c

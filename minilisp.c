@@ -886,8 +886,7 @@ static Obj *prim_number_to_byte(void *root, Obj **env, Obj **list) {
     return make_string(root, buf);
 }
 
-// (string->number <string>)
-static Obj *prim_string_to_number(void *root, Obj **env, Obj **list) {
+static Obj *common_string_to_number(void *root, Obj **env, Obj **list, int byte) {
     int n;
 
     Obj *args = eval_list(root, env, list);
@@ -896,8 +895,23 @@ static Obj *prim_string_to_number(void *root, Obj **env, Obj **list) {
     Obj *string = args->car;
     if (string->type != TSTRING)
         error("string->number takes only strings");
-    n = atoi(string->string);
+    if (byte) {
+        n = (int)(string->string[0]);
+    } else {
+        n = atoi(string->string);
+    }
     return make_int(root, n);
+}
+
+// (string->number <string>)
+static Obj *prim_string_to_number(void *root, Obj **env, Obj **list) {
+    return common_string_to_number(root, env, list, 0);
+}
+
+// (byte->number <string>)
+// Convert a 1 byte string to its numerical representation
+static Obj *prim_byte_to_number(void *root, Obj **env, Obj **list) {
+    return common_string_to_number(root, env, list, 1);
 }
 
 // (string-length <string>); returns the length _in bytes_ of a string
@@ -1250,6 +1264,7 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "string-append", prim_string_append);
     add_primitive(root, env, "number->string", prim_number_to_string);
     add_primitive(root, env, "string->number", prim_string_to_number);
+    add_primitive(root, env, "byte->number", prim_byte_to_number);
     add_primitive(root, env, "number->byte", prim_number_to_byte);
     add_primitive(root, env, "substring", prim_substring);
     add_primitive(root, env, "substring-utf8", prim_substring_utf8);

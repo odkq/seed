@@ -11,7 +11,8 @@
 #include <string.h>
 #include <sys/mman.h>
 
-static __attribute((noreturn)) void error(char *fmt, ...) {
+// __attribute((noreturn))
+static void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -1109,6 +1110,47 @@ static Obj *prim_minus(void *root, Obj **env, Obj **list) {
     return make_int(root, r);
 }
 
+// (* <integer> ...)
+static Obj *prim_mul(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    int total = 0;
+    for (Obj *p = args; p != Nil; p = p->cdr)
+        if (p->car->type != TINT)
+            error("* takes only numbers");
+    total = args->car->value;
+    for (Obj *p = args->cdr; p != Nil; p = p->cdr)
+        total *= p->car->value;
+    return make_int(root, total);
+}
+
+// (/ <integer> <integer>)
+static Obj *prim_div(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    if (length(args) != 2)
+        error("malformed /");
+    Obj *x = args->car;
+    Obj *y = args->cdr->car;
+    if (x->type != TINT || y->type != TINT)
+        error("/ takes only numbers");
+    if (y->value == 0)
+        error("division by 0");
+    return make_int(root, (int)(x->value / y->value));
+}
+
+// (% <integer> <integer>)
+static Obj *prim_quot(void *root, Obj **env, Obj **list) {
+    Obj *args = eval_list(root, env, list);
+    if (length(args) != 2)
+        error("malformed /");
+    Obj *x = args->car;
+    Obj *y = args->cdr->car;
+    if (x->type != TINT || y->type != TINT)
+        error("/ takes only numbers");
+    if (y->value == 0)
+        error("division by 0");
+    return make_int(root, (int)(x->value % y->value));
+}
+
 // (< <integer> <integer>)
 static Obj *prim_lt(void *root, Obj **env, Obj **list) {
     Obj *args = eval_list(root, env, list);
@@ -1251,6 +1293,9 @@ static void define_primitives(void *root, Obj **env) {
     add_primitive(root, env, "gensym", prim_gensym);
     add_primitive(root, env, "+", prim_plus);
     add_primitive(root, env, "-", prim_minus);
+    add_primitive(root, env, "*", prim_mul);
+    add_primitive(root, env, "/", prim_div);
+    add_primitive(root, env, "%", prim_quot);
     add_primitive(root, env, "<", prim_lt);
     add_primitive(root, env, "define", prim_define);
     add_primitive(root, env, "defun", prim_defun);

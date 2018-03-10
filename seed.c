@@ -14,6 +14,7 @@
 
 static int raw_mode = 0;
 static int atexit_registered = 0;
+static int g_into_repl = 0;
 static struct termios orig_termios;
 
 static void seed_atexit(void);
@@ -68,6 +69,11 @@ static Obj *prim_read_character(void *root, Obj **env, Obj **list) {
     if (nread <= 0)
 		return Nil;
     return make_int(root, (int)c);
+}
+
+// (into-repl) ; return wether seed was called with -r or not
+static Obj *prim_into_repl(void *root, Obj **env, Obj **list) {
+    return make_int(root, (int)g_into_repl);
 }
 
 // (load-file <path>); loads the file into a list of strings
@@ -156,8 +162,6 @@ static void seed_atexit(void) {
 }
 
 int main(int argc, char **argv) {
-    int repl = 0;
-
     // Debug flags
     //debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
     //always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
@@ -180,13 +184,14 @@ int main(int argc, char **argv) {
     add_primitive(root, env, "sleep", prim_sleep);
     add_primitive(root, env, "load-file", prim_load_file);
     add_primitive(root, env, "read-character", prim_read_character);
+    add_primitive(root, env, "into-repl", prim_into_repl);
 
     if ((argc > 1) && (!strcmp(argv[1], "-r"))) {
         printf("Entering repl\n");
-	    repl = 1;
+	    g_into_repl = 1;
     }
 
-    if (!repl) {
+    if (!g_into_repl) {
         if (enable_raw_mode(STDIN_FILENO) == -1)
             return -1;
     }
@@ -194,12 +199,13 @@ int main(int argc, char **argv) {
     const char *buffers[] = {seed_lisp, NULL};
     int i;
     for(i = 0; ; i++) {
-        if (repl)
+        /* if (g_into_repl)
             current_buffer = NULL;
         else
-            current_buffer = (char *)buffers[i];
+        */
+        current_buffer = (char *)buffers[i];
         current_index = 0;
-        if ((!repl) && (current_buffer == NULL)) {
+        if ((!g_into_repl) && (current_buffer == NULL)) {
             break;
         }
         // The main loop

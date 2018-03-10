@@ -22,12 +22,25 @@
 (defmacro progn (expr . rest)
     (list (cons 'lambda (cons () (cons expr rest)))))
 
-; VT100 escape sequences. See http://www.termsys.demon.co.uk/vtansi.htm
+(defmacro when (expr . body)
+  (cons 'if (cons expr (list (cons 'progn body)))))
+
+;;; Applies each element of lis to fn, and returns their return values as a
+;;; list.
+(defun map (lis fn)
+  (when lis
+    (cons (fn (car lis))
+    (map (cdr lis) fn))))
+
+;; ANSI/VT100 escape sequences. See http://www.termsys.demon.co.uk/vtansi.htm
+;; and https://en.wikipedia.org/wiki/ANSI_escape_code
 (define esc (number->byte 27))
 (defun curnopar (s) (string-append esc s))
 (defun curonepar (n s) (string-append esc "[" (number->string n) s))
 (defun curtwopar (a b s) (string-append esc "[" (number->string a) ";"
                           (number->string b) s))
+(defun curthreepar (a b c s) (string-append esc "[" (number->string a) ";"
+                               (number->string b) ";" (number->string c) s))
 (defun cur-home () (curnopar "[H"))
 (defun cur-xy (x y) (curtwopar y x "f"))
 (defun cur-up (y) (curonepar y "A"))
@@ -48,6 +61,8 @@
 (defun scroll-up () (curonepar "M"))
 (defun set-one-attrib (a) (curonepar a "m"))
 (defun set-two-attrib (a b) (curtwopar a b "m"))
+(defun set-fg (a) (curthreepar 38 5 a "m"))
+(defun set-bg (a) (curthreepar 48 5 a "m"))
 (defun prn-xy (x y s) (prn (cur-xy x y)) (prn s))
 
 (define width (car (screen-size)))
@@ -73,8 +88,8 @@
 (defun draw-buffer (w-x w-y w-w w-h delta-x delta-y buffer)
   (let tx 0
     (let ty 0
-      (while (< tx w-h)
-        (while (< ty w-w)
+      (while (< tx (+ w-w 1))
+        (while (< ty (+ w-h 1))
           (prn-xy (+ w-x tx) (+ w-y ty) "·")
           (setq ty (+ ty 1)))
         (setq ty 0)
@@ -102,61 +117,57 @@
   (prn-xy x (+ y height) corner-bottom-left)
   (prn-xy (+ x width) (+ y height) corner-bottom-right))
 
-; Entry point
-(prn (clr-screen))
-
-(defun test-attributes ()
-  (prn-xy 40 30 "normal")
-  (prn (set-one-attrib 1))
-  (prn "bright")
-  (prn (clear-attribs))
-  (prn-xy 40 31 "normal")
-  (prn (set-one-attrib 2))
-  (prn "dim")
-  (prn (clear-attribs))
-  (prn-xy 40 32 "normal")
-  (prn (set-one-attrib 4))
-  (prn "underscore")
-  (prn (clear-attribs))
-  (prn-xy 40 33 "normal")
-  (prn (set-one-attrib 5))
-  (prn "blinking")
-  (prn (clear-attribs))
-  (prn-xy 40 34 "normal")
-  (prn (set-one-attrib 7))
-  (prn "reverse")
-  (prn (clear-attribs))
-  (prn-xy 40 35 "normal")
-  (prn (set-one-attrib 8))
-  (prn "hidden")
-  (prn (clear-attribs)))
+(defun test-attributes (n)
+  (let attribs (list (cons 1 "bright") (cons 2 "dim") (cons 4 "underscore")
+                     (cons 5 "blinking") (cons 7 "reverse") (cons 8 "hidden"))
+    (map attribs (lambda (x)
+                   (prn-xy 40 n "->")
+                   (prn (set-one-attrib (car x)))
+                   (prn (cdr x))
+                   (prn (clear-attribs))
+                   (setq n (+ n 1))))))
 
 (defun test-colors ()
   (let fg_color 30
     (while (< fg_color 38)
       (let bg_color 40
         (while (< bg_color 48)
-          (let x (+ (- bg_color 40)
-                    (- bg_color 40)
-                    (- bg_color 40)
-                    (- bg_color 40))
+          (let x (+ (- bg_color 40))
             (let y (- fg_color 30)
-              (prn-xy   x y "-")
               (prn (set-two-attrib fg_color bg_color))
-              (prn "AB")
+              (prn-xy x y "X")
               (prn (clear-attribs))))
           (setq bg_color (+ bg_color 1))))
       (setq fg_color (+ fg_color 1)))))
 
-(define do-loop 1)
-(test-attributes)
-(test-colors)
-(while (= do-loop 1)
-  (let key (read-character)
-    (if (= key 113)
-      (setq do-loop 0))
-    (draw-buffer 5 5 20 20 0 0 ())
-    (draw-box 4 4 21 21)))
+(defun test-colors-256 ()
+  (let color 0
+    (while (< color 256)
+      (let x (+ 1 (* (% color 16) 4))
+        (let y (+ 1 (/ color 16))
+          (prn (set-fg color))
+          (prn-xy x y (number->string color))
+          (prn (clear-attribs))
+          (prn (set-fg 15))
+          (prn (set-bg color))
+          (prn-xy x (+ y 16) (number->string color))
+          (prn (clear-attribs))))
+      (setq color (+ color 1)))))
+
+; Entry point
+(if (= (into-repl) 0)
+  ((lambda ()
+    (prn (clr-screen))
+    (define do-loop 1)
+    (test-attributes 35)
+    (test-colors-256)
+    (while (= do-loop 1)
+      (let key (read-character)
+        (if (= key 113)
+          (setq do-loop 0))
+        (draw-buffer 5 5 60 25 0 0 ())
+        (draw-box 4 4 62 27)))))
+  (println "into repl"))
 
 ;(define do-loop 1)
 ;(define y 1)

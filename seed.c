@@ -10,6 +10,7 @@
 #include "seed.lisp.h"
 #define NO_MAIN 1
 #include "minilisp.c"
+// #include "lzw.c"
 
 
 static int raw_mode = 0;
@@ -23,6 +24,8 @@ static void seed_atexit(void);
 // Return a list with (columns lines)
 static Obj *prim_screen_size(void *root, Obj **env, Obj **list)
 {
+    (void)(env);
+    (void)(list);
     struct winsize ws;
     DEFINE3(width, height, head);
     if (ioctl(1, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
@@ -36,7 +39,8 @@ static Obj *prim_screen_size(void *root, Obj **env, Obj **list)
 }
 
 // (prn <string>) ; print raw string
-static Obj *prim_prn(void *root, Obj **env, Obj **list) {
+static Obj *prim_prn(void *root, Obj **env, Obj **list)
+{
     Obj *args = eval_list(root, env, list);
 
     if ((length(args) < 1))
@@ -49,7 +53,8 @@ static Obj *prim_prn(void *root, Obj **env, Obj **list) {
 }
 
 // (sleep <number>) ; sleep for the given number of seconds
-static Obj *prim_sleep(void *root, Obj **env, Obj **list) {
+static Obj *prim_sleep(void *root, Obj **env, Obj **list)
+{
     Obj *args = eval_list(root, env, list);
 
     if ((length(args) < 1))
@@ -61,10 +66,12 @@ static Obj *prim_sleep(void *root, Obj **env, Obj **list) {
 }
 
 // (read-character) ; read a character from raw input
-static Obj *prim_read_character(void *root, Obj **env, Obj **list) {
-	unsigned char c;
-	int nread;
-
+static Obj *prim_read_character(void *root, Obj **env, Obj **list)
+{
+    (void)(env);
+    (void)(list);
+    unsigned char c;
+    int nread;
     nread = read(STDIN_FILENO, &c, 1);
     if (nread <= 0)
 		return Nil;
@@ -72,24 +79,29 @@ static Obj *prim_read_character(void *root, Obj **env, Obj **list) {
 }
 
 // (into-repl) ; return wether seed was called with -r or not
-static Obj *prim_into_repl(void *root, Obj **env, Obj **list) {
+static Obj *prim_into_repl(void *root, Obj **env, Obj **list)
+{
+    (void)(env);
+    (void)(list);
     return make_int(root, (int)g_into_repl);
 }
 
 // (load-file <path>); loads the file into a list of strings
-static Obj *prim_load_file(void *root, Obj **env, Obj **list) {
-    char buffer[STRING_MAX_LEN + 1];
+static Obj *prim_load_file(void *root, Obj **env, Obj **list)
+{
     char *p;
+    FILE *f;
+    int nc;
+    char buffer[STRING_MAX_LEN + 1];
+
     Obj *args = eval_list(root, env, list);
-    DEFINE1(output);
-    Obj *currobj;
-    Obj *currel = *output;
+    DEFINE2(head, currobj);
+    *head = Nil;
 
     if ((length(args) < 1))
         error("wrong number of parameters for load-file");
     if (args->car->type != TSTRING)
         error("load-file only accept string");
-    FILE *f;
     printf("Opening %s\n", args->car->string);
     f = fopen(args->car->string, "r");
     if (f == NULL) {
@@ -100,22 +112,20 @@ static Obj *prim_load_file(void *root, Obj **env, Obj **list) {
         p = fgets(buffer, STRING_MAX_LEN, f);
         if (p == NULL) {
             fclose(f);
-            return *output;
+            return reverse(*head);
         }
-        currobj = make_string(root, buffer);
-        if (*output == NULL) {
-            (*output) = currobj;
-            printf("first line %s", buffer);
-            currel = *output;
-        } else {
-            currel->cdr = currobj;
-            currel = currel->cdr;
+        nc = strlen(p) - 1;
+        if (p[nc] == '\n') {
+            p[nc] = '\0';
         }
+        *currobj = make_string(root, buffer);
+        *head = cons(root, currobj, head);
     }
 }
 
 /* Raw mode: Taken from linenoise (see LICENSE) */
-static int enable_raw_mode(int fd) {
+static int enable_raw_mode(int fd)
+{
     struct termios raw;
 
     if (!isatty(STDIN_FILENO)) goto fatal;
@@ -150,18 +160,31 @@ fatal:
     return -1;
 }
 
-static void disable_raw_mode(int fd) {
+static Obj *prim_raw_mode(void *root, Obj **env, Obj **list)
+{
+    (void)(root);
+    (void)(env);
+    (void)(list);
+    if (enable_raw_mode(STDIN_FILENO) == -1)
+        error("raw-mode failed");
+    return Nil;
+}
+
+static void disable_raw_mode(int fd)
+{
     /* Don't even check the return value as it's too late. */
     if (raw_mode && tcsetattr(fd,TCSAFLUSH,&orig_termios) != -1)
         raw_mode = 0;
 }
 
 /* At exit we'll try to fix the terminal to the initial conditions. */
-static void seed_atexit(void) {
+static void seed_atexit(void)
+{
     disable_raw_mode(STDIN_FILENO);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     // Debug flags
     //debug_gc = getEnvFlag("MINILISP_DEBUG_GC");
     //always_gc = getEnvFlag("MINILISP_ALWAYS_GC");
@@ -185,30 +208,22 @@ int main(int argc, char **argv) {
     add_primitive(root, env, "load-file", prim_load_file);
     add_primitive(root, env, "read-character", prim_read_character);
     add_primitive(root, env, "into-repl", prim_into_repl);
+    add_primitive(root, env, "raw-mode", prim_raw_mode);
 
     if ((argc > 1) && (!strcmp(argv[1], "-r"))) {
         printf("Entering repl\n");
 	    g_into_repl = 1;
     }
 
-    if (!g_into_repl) {
-        if (enable_raw_mode(STDIN_FILENO) == -1)
-            return -1;
-    }
-
     const char *buffers[] = {seed_lisp, NULL};
     int i;
     for(i = 0; ; i++) {
-        /* if (g_into_repl)
-            current_buffer = NULL;
-        else
-        */
         current_buffer = (char *)buffers[i];
         current_index = 0;
         if ((!g_into_repl) && (current_buffer == NULL)) {
             break;
         }
-        // The main loop
+        // The main repl loop
         for (;;) {
             *expr = read_expr(root);
             if (!*expr)

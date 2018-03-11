@@ -2,10 +2,11 @@
 (defun not (e) (if (eq e t) () t))
 (defun list (x . y) (cons x y))
 
-(defun nth (lis n)    ;;  Returns nth element of lis.
-  (if (= n 0)
-    (car lis)
-    (nth (cdr lis) (- n 1))))
+;(defun nth (lis n)    ;;  Returns nth element of lis.
+;  (if (= n 0)
+;    (car lis)
+;    (nth (cdr lis) (- n 1))))
+
 
 ; let for temporary variables with scope
 (defmacro let (var val . body)
@@ -24,6 +25,11 @@
 
 (defmacro when (expr . body)
   (cons 'if (cons expr (list (cons 'progn body)))))
+
+; non recursive definition of nth
+(defun nth (lis n)
+  (dotimes n (setq lis (cdr lis)))
+  (car lis))
 
 ;;; Applies each element of lis to fn, and returns their return values as a
 ;;; list.
@@ -157,6 +163,7 @@
 ; Entry point
 (if (= (into-repl) 0)
   ((lambda ()
+    (raw-mode)
     (prn (clr-screen))
     (define do-loop 1)
     (test-attributes 35)

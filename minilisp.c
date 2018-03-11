@@ -94,10 +94,10 @@ typedef struct Obj {
 } Obj;
 
 // Constants
-static Obj *True = &(Obj){ TTRUE };
-static Obj *Nil = &(Obj){ TNIL };
-static Obj *Dot = &(Obj){ TDOT };
-static Obj *Cparen = &(Obj){ TCPAREN };
+static Obj *True = &(Obj){ TTRUE, 0, {0} };
+static Obj *Nil = &(Obj){ TNIL, 0, {0} };
+static Obj *Dot = &(Obj){ TDOT, 0, {0} };
+static Obj *Cparen = &(Obj){ TCPAREN, 0, {0} };
 // The list containing all symbols. Such data structure is traditionally called the "obarray", but I
 // avoid using it as a variable name as this is not an array but a list.
 static Obj *Symbols;
@@ -644,7 +644,7 @@ static Obj *push_env(void *root, Obj **env, Obj **vars, Obj **vals) {
 }
 
 // Evaluates the list elements from head and returns the last return value.
-static Obj *progn(void *root, Obj **env, Obj **list) {
+static Obj *progn(void *root, Obj **env, Obj **list){
     DEFINE2(lp, r);
     for (*lp = *list; *lp != Nil; *lp = (*lp)->cdr) {
         *r = (*lp)->car;
@@ -654,7 +654,8 @@ static Obj *progn(void *root, Obj **env, Obj **list) {
 }
 
 // Evaluates all the list elements and returns their return values as a new list.
-static Obj *eval_list(void *root, Obj **env, Obj **list) {
+static Obj *eval_list(void *root, Obj **env, Obj **list)
+{
     DEFINE4(head, lp, expr, result);
     *head = Nil;
     for (lp = list; *lp != Nil; *lp = (*lp)->cdr) {
@@ -665,11 +666,14 @@ static Obj *eval_list(void *root, Obj **env, Obj **list) {
     return reverse(*head);
 }
 
-static bool is_list(Obj *obj) {
+static bool is_list(Obj *obj)
+{
     return obj == Nil || obj->type == TCELL;
 }
 
-static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
+static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args)
+{
+    (void)(env);
     DEFINE3(params, newenv, body);
     *params = (*fn)->params;
     *newenv = (*fn)->env;
@@ -679,7 +683,8 @@ static Obj *apply_func(void *root, Obj **env, Obj **fn, Obj **args) {
 }
 
 // Apply fn with args.
-static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
+static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args)
+{
     if (!is_list(*args))
         error("argument must be a list");
     if ((*fn)->type == TPRIMITIVE)
@@ -690,10 +695,12 @@ static Obj *apply(void *root, Obj **env, Obj **fn, Obj **args) {
         return apply_func(root, env, fn, eargs);
     }
     error("not supported");
+    return NULL;
 }
 
 // Searches for a variable by symbol. Returns null if not found.
-static Obj *find(Obj **env, Obj *sym) {
+static Obj *find(Obj **env, Obj *sym)
+{
     for (Obj *p = *env; p != Nil; p = p->up) {
         for (Obj *cell = p->vars; cell != Nil; cell = cell->cdr) {
             Obj *bind = cell->car;
@@ -751,6 +758,7 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
     default:
         error("Bug: eval: Unknown tag type: %d", (*obj)->type);
     }
+    return Nil;
 }
 
 //======================================================================
@@ -759,6 +767,8 @@ static Obj *eval(void *root, Obj **env, Obj **obj) {
 
 // 'expr
 static Obj *prim_quote(void *root, Obj **env, Obj **list) {
+    (void)(root);
+    (void)(env);
     if (length(*list) != 1)
         error("Malformed quote");
     return (*list)->car;
@@ -828,6 +838,8 @@ static Obj *prim_while(void *root, Obj **env, Obj **list) {
 
 // (gensym)
 static Obj *prim_gensym(void *root, Obj **env, Obj **list) {
+  (void)(env);
+  (void)(list);
   static int count = 0;
   char buf[10];
   snprintf(buf, sizeof(buf), "G__%d", count++);
@@ -968,10 +980,9 @@ static int bytes_of_utf8_character(const unsigned char *s)
  * the last '\0' */
 static int utf8len(const char *s)
 {
-	int delta, length = 0;
-
-	while (1) {
-		delta = bytes_of_utf8_character(s);
+    int delta, length = 0;
+    while (1) {
+        delta = bytes_of_utf8_character((unsigned char *)s);
         if (delta == 0)
             return length;
         else if (delta == -1)
@@ -980,6 +991,7 @@ static int utf8len(const char *s)
         s += delta;
     }
 }
+
 // (string-length-utf8 <string>) ; returns the length in characters of a
 //                                 string encoded as utf-8
 static Obj *prim_string_length_utf8(void *root, Obj **env, Obj **list) {
@@ -990,12 +1002,11 @@ static Obj *prim_string_length_utf8(void *root, Obj **env, Obj **list) {
         error("wrong number of parameters for string-length");
     if (args->car->type != TSTRING)
         error("string-length only accept strings");
-	len = utf8len(args->car->string);
-	if (len < 0) {
-		return Nil;
-	}
+    len = utf8len(args->car->string);
+    if (len < 0) {
+        return Nil;
+    }
     return make_int(root, len);
-
 }
 
 static Obj *common_substring(void *root, Obj **env, Obj **list, int bytes) {
@@ -1037,7 +1048,7 @@ static Obj *common_substring(void *root, Obj **env, Obj **list, int bytes) {
         error("start > end");
     } else if (start < 0) {
         error("start < 0");
-    } else if (bytes && (end > strlen(string->string))) {
+    } else if (bytes && (end > (int)strlen(string->string))) {
         error("end overflow");
     } else if ((!bytes) && (end > utf8len(string->string))) {
         error("end overflow");
@@ -1051,13 +1062,13 @@ static Obj *common_substring(void *root, Obj **env, Obj **list, int bytes) {
         p = buf;
         i = 0;
         for (j = 0; j < start; j++) {
-            delta = bytes_of_utf8_character(&(string->string[i]));
+            delta = bytes_of_utf8_character((unsigned char *)&(string->string[i]));
             if (delta <= 0)
                 return Nil;
             i += delta;
         }
         for (k = 0; k < (end - start); k++) {
-            delta = bytes_of_utf8_character(&(string->string[i]));
+            delta = bytes_of_utf8_character((unsigned char *)&(string->string[i]));
             if (delta == 0) {
                 break;
             } else if (delta < 0) {
@@ -1322,10 +1333,12 @@ static void define_primitives(void *root, Obj **env) {
 //======================================================================
 
 // Returns true if the environment variable is defined and not the empty string.
+/*
 static bool getEnvFlag(char *name) {
     char *val = getenv(name);
     return val && val[0];
 }
+*/
 
 #ifndef NO_MAIN
 int main(int argc, char **argv) {
